@@ -4,6 +4,7 @@ require 'pg'
 class TableNode
     attr_accessor :table_name
     attr_accessor :column_name
+    attr_accessor :foreign_column_name
     attr_accessor :depends
 end
 
@@ -18,7 +19,7 @@ end
 
 def foreign_keys(table)
     q = "
-    SELECT
+    SELECT DISTINCT
         tc.constraint_name, tc.table_name, kcu.column_name, 
         ccu.table_name AS foreign_table_name,
         ccu.column_name AS foreign_column_name 
@@ -33,19 +34,17 @@ def foreign_keys(table)
     return exec(q)
 end
 
-# TODO actually make this recursive
-def foreign_key_tree(table, column = nil)
+def foreign_key_tree(table, foreign_column = nil, column = nil)
     t = TableNode.new
     t.table_name = table
+    t.foreign_column_name = foreign_column
     t.column_name = column
     t.depends = Array.new
 
     x = foreign_keys(table)
-
-    puts x.inspect
-
+    
     x.each do |dep|
-        new_table = foreign_key_tree(dep['foreign_table_name'], dep['foreign_column_name'])
+        new_table = foreign_key_tree(dep['foreign_table_name'], dep['foreign_column_name'], dep['column_name'])
         t.depends << new_table
     end
 
@@ -57,10 +56,14 @@ def generate_insert(table)
 end
 
 def pretty_print(table_node, indent = "")
-    puts "#{indent}#{table_node.table_name}: #{table_node.column_name}" 
+    if table_node.column_name == nil
+        puts "#{indent}#{table_node.table_name}" 
+    else
+        puts "#{indent}#{table_node.table_name}: #{table_node.foreign_column_name} -> #{table_node.column_name}" 
+    end
     table_node.depends.each { |x|
         pretty_print(x, indent + "    ")
     }
 end
 
-pretty_print(foreign_key_tree('logbook_entry_note'))
+pretty_print(foreign_key_tree("#{ARGV[0]}"))
