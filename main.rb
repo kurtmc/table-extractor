@@ -65,22 +65,22 @@ def foreign_key_tree(schema, table, parent = nil, foreign_column = nil, column =
         t.values = exec("SELECT * FROM #{schema}.#{table} LIMIT 1")[0]
     else
         where = "WHERE"
-        puts "Foreign Keys: #{parent.foreign_keys}"
+        #puts "Foreign Keys: #{parent.foreign_keys}"
         unless parent.foreign_keys.size == 0
             parent.foreign_keys.each { |x|
                 if x['foreign_table_name'] == t.table_name
                     foreign_col = x['foreign_column_name']
                     col = x['column_name']
-                    puts "Parent values: #{parent.values.inspect}"
+                    #puts "Parent values: #{parent.values.inspect}"
                     parent_val = parent.values[col]
                     where = "#{where} #{foreign_col} = '#{parent_val}'"
                 end
             }
         end
         query = "SELECT * FROM #{schema}.#{table} #{where}";
-        puts "Query: #{query}"
+        #puts "Query: #{query}"
         t.values = exec(query)[0]
-        puts "VALUES: #{t.values.inspect}"
+        #puts "VALUES: #{t.values.inspect}"
     end
     
     t.foreign_keys.each do |dep|
@@ -121,10 +121,12 @@ def generate_insert(schema, table_node)
 	values.each_with_index { |val, i|
 		if values[i] == nil
 			values[i] = 'NULL'
+		else
+			values[i] = "'#{values[i]}'"
 		end
 	}
 	
-    puts "VALUES(#{values.join(", ")})"
+    puts "VALUES(#{values.join(", ")});"
 
 end
 
@@ -144,6 +146,6 @@ schema, table = ARGV[0].split(".")
 
 dependency_tree = foreign_key_tree(schema, table)
 
-pretty_print(dependency_tree)
+#pretty_print(dependency_tree)
 
 generate_insert(schema, dependency_tree)
