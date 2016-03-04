@@ -6,6 +6,7 @@ class TableNode
     attr_accessor :column_name
     attr_accessor :foreign_column_name
     attr_accessor :depends
+    attr_accessor :parent
 end
 
 def exec(query)
@@ -34,24 +35,47 @@ def foreign_keys(table)
     return exec(q)
 end
 
-def foreign_key_tree(table, foreign_column = nil, column = nil)
+def foreign_key_tree(table, parent = nil, foreign_column = nil, column = nil)
     t = TableNode.new
     t.table_name = table
     t.foreign_column_name = foreign_column
     t.column_name = column
+    t.parent = parent
     t.depends = Array.new
 
     x = foreign_keys(table)
     
     x.each do |dep|
-        new_table = foreign_key_tree(dep['foreign_table_name'], dep['foreign_column_name'], dep['column_name'])
+        new_table = foreign_key_tree(dep['foreign_table_name'], t, dep['foreign_column_name'], dep['column_name'])
         t.depends << new_table
     end
 
     return t
 end
 
-def generate_insert(table)
+def retrive_columns(schema, table)
+    q = "
+    SELECT *
+    FROM information_schema.columns
+    WHERE table_schema = '#{schema}'
+      AND table_name   = '#{table}'
+    "
+    res = exec(q)
+    result = Array.new
+    res.each { |x|
+        result << x['column_name']
+    }
+    return result
+end
+
+def generate_insert(schema, table_node)
+    table_node.depends.each { |t|
+        generate_insert(schema, t)
+    }
+
+    puts "INSERT INTO #{schema}.#{table_node.table_name}"
+    puts "(#{retrive_columns(schema, table_node.table_name).join(", ")})"
+    puts "VALUES()"
 
 end
 
@@ -66,4 +90,10 @@ def pretty_print(table_node, indent = "")
     }
 end
 
-pretty_print(foreign_key_tree("#{ARGV[0]}"))
+dependency_tree = foreign_key_tree("#{ARGV[0]}")
+
+pretty_print(dependency_tree)
+
+generate_insert('central', dependency_tree)
+
+#puts retrive_columns('central', "#{ARGV[0]}")[6]
