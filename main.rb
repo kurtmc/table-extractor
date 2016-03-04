@@ -95,5 +95,3 @@ dependency_tree = foreign_key_tree("#{ARGV[0]}")
 pretty_print(dependency_tree)
 
 generate_insert('central', dependency_tree)
-
-#puts retrive_columns('central', "#{ARGV[0]}")[6]
