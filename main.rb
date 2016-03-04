@@ -33,18 +33,19 @@ def foreign_keys(table)
     return exec(q)
 end
 
-def foreign_key_tree(table)
+# TODO actually make this recursive
+def foreign_key_tree(table, column = nil)
     t = TableNode.new
     t.table_name = table
-    t.column_name = nil
+    t.column_name = column
     t.depends = Array.new
 
     x = foreign_keys(table)
+
     puts x.inspect
+
     x.each do |dep|
-        new_table = TableNode.new
-        new_table.table_name = dep['foreign_table_name']
-        new_table.column_name = dep['foreign_column_name']
+        new_table = foreign_key_tree(dep['foreign_table_name'], dep['foreign_column_name'])
         t.depends << new_table
     end
 
@@ -55,4 +56,11 @@ def generate_insert(table)
 
 end
 
-puts foreign_key_tree('logbook_entry_note').inspect
+def pretty_print(table_node, indent = "")
+    puts "#{indent}#{table_node.table_name}: #{table_node.column_name}" 
+    table_node.depends.each { |x|
+        pretty_print(x, indent + "    ")
+    }
+end
+
+pretty_print(foreign_key_tree('logbook_entry_note'))
