@@ -11,6 +11,13 @@ class TableNode
     attr_accessor :foreign_keys
 end
 
+class InsertStatement
+    attr_accessor :schema
+    attr_accessor :table_name
+    attr_accessor :columns
+    attr_accessor :values
+end
+
 def exec(query)
     conn = PG.connect(host: 'db.local.eroad.io', dbname: 'central', user: 'postgres', password: 'postgres', port: '5432')
     result = Array.new
@@ -106,14 +113,18 @@ def retrive_columns(schema, table)
     return result
 end
 
-def generate_insert(schema, table_node)
+def generate_insert(schema, table_node, inserts)
+
     table_node.depends.each { |t|
-        generate_insert(schema, t)
+        generate_insert(schema, t, inserts)
     }
 
-    puts "INSERT INTO #{schema}.#{table_node.table_name}"
+    insert = InsertStatement.new
+
+    insert.schema = schema
+    insert.table_name = table_node.table_name
 	columns = retrive_columns(schema, table_node.table_name)
-    puts "(#{columns.join(", ")})"
+    insert.columns = columns
 	values = Array.new
 	columns.each { |col|
 		values << table_node.values[col]
@@ -126,8 +137,16 @@ def generate_insert(schema, table_node)
 		end
 	}
 	
-    puts "VALUES(#{values.join(", ")});"
+    insert.values = values
+    inserts << insert
+end
 
+def print_inserts(inserts)
+    inserts.each { |i|
+        puts "INSERT INTO #{i.schema}.#{i.table_name}"
+        puts "(#{i.columns.join(", ")})"
+        puts "VALUES(#{i.values.join(", ")});"
+    }
 end
 
 def pretty_print(table_node, indent = "")
@@ -148,4 +167,10 @@ dependency_tree = foreign_key_tree(schema, table)
 
 #pretty_print(dependency_tree)
 
-generate_insert(schema, dependency_tree)
+inserts = Array.new
+generate_insert(schema, dependency_tree, inserts)
+
+# TODO implement comparison so that .uniq works
+#inserts = inserts.uniq
+
+print_inserts(inserts)
