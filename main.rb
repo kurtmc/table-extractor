@@ -37,6 +37,7 @@ end
 
 def foreign_key_tree(schema, table, parent = nil, foreign_column = nil, column = nil)
     t = TableNode.new
+    t.data = Hash.new
     t.table_name = table
     t.foreign_column_name = foreign_column
     t.column_name = column
@@ -44,35 +45,37 @@ def foreign_key_tree(schema, table, parent = nil, foreign_column = nil, column =
     t.depends = Array.new
     t.foreign_keys = foreign_keys(schema, table)
 
-
-    if t.parent == nil
-        t.values = exec("SELECT * FROM #{schema}.#{table} LIMIT 1")[0]
-    else
-        where = "WHERE"
-        #puts "Foreign Keys: #{parent.foreign_keys}"
-        unless parent.foreign_keys.size == 0
-            parent.foreign_keys.each { |x|
-                if x['foreign_table_name'] == t.table_name
-                    foreign_col = x['foreign_column_name']
-                    col = x['column_name']
-                    #puts "Parent values: #{parent.values.inspect}"
-                    parent_val = parent.values[col]
-                    where = "#{where} #{foreign_col} = '#{parent_val}'"
-                end
-            }
-        end
-        query = "SELECT * FROM #{schema}.#{table} #{where}";
-        #puts "Query: #{query}"
-        t.values = exec(query)[0]
-        #puts "VALUES: #{t.values.inspect}"
-    end
-
     t.foreign_keys.each do |dep|
         new_table = foreign_key_tree(schema, dep['foreign_table_name'], t, dep['foreign_column_name'], dep['column_name'])
         t.depends << new_table
     end
 
     return t
+end
+
+#TODO Ruby not modifying the tree correctly
+def add_values(schema, table, t)
+    if t.parent == nil
+        t.data['values'] = exec("SELECT * FROM #{schema}.#{table} LIMIT 1")[0]
+    else
+        where = "WHERE"
+        unless t.parent.foreign_keys.size == 0
+            t.parent.foreign_keys.each { |x|
+                if x['foreign_table_name'] == t.table_name
+                    foreign_col = x['foreign_column_name']
+                    col = x['column_name']
+                    parent_val = t.parent.data['values'][col]
+                    where = "#{where} #{foreign_col} = '#{parent_val}'"
+                end
+            }
+        end
+        query = "SELECT * FROM #{schema}.#{table} #{where}";
+        t.data['values'] = exec(query)[0]
+    end
+
+    t.depends.each { |n|
+        add_values(schema, n.table_name, n)
+    }
 end
 
 def retrive_columns(schema, table)
@@ -104,13 +107,12 @@ def generate_insert(schema, table_node, inserts)
     insert.columns = columns
     values = Array.new
     columns.each { |col|
-        values << table_node.values[col]
+        values << table_node.data['values'][col]
     }
     values.each_with_index { |val, i|
         if values[i] == nil
             values[i] = 'NULL'
-        else
-            values[i] = "'#{values[i]}'"
+        else values[i] = "'#{values[i]}'"
         end
     }
 
@@ -145,6 +147,8 @@ end
 
 def get_inserts_for_table(schema, table)
     dependency_tree = foreign_key_tree(schema, table)
+
+    add_values(schema, table, dependency_tree)
 
     inserts = Array.new
     generate_insert(schema, dependency_tree, inserts)
