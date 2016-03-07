@@ -1,8 +1,9 @@
 require 'pg'
+require 'pg_query'
+
 require './insert_statement'
 require './table_node'
 require './sql_utils'
-require 'pg_query'
 require './dependency'
 
 def add_values(schema, table, t)
