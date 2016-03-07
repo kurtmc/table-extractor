@@ -39,8 +39,6 @@ end
 
 options = Parser.parse(ARGV)
 
-puts options.inspect
-
 unless options.table.nil?
 	schema, table = options.table.split('.')
 	if schema.nil? || table.nil?
@@ -51,7 +49,7 @@ unless options.table.nil?
 end
 
 unless options.query.nil?
-	puts "QUERY!!!"
+	get_inserts_for_query(options.query)
 end
 
 if options.table.nil? && options.query.nil?

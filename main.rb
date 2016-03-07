@@ -2,6 +2,7 @@ require 'pg'
 require './insert_statement'
 require './table_node'
 require './sql_utils'
+require 'pg_query'
 
 def foreign_keys(schema, table)
     q = "
@@ -152,4 +153,36 @@ def get_inserts_for_table(schema, table)
     # inserts = inserts.uniq
 
     print_inserts(inserts)
+end
+
+def get_inserts_for_query(query)
+    ast = PgQuery.parse(query)
+    
+    if ast.parsetree.size == 0
+        puts 'No querys parsed'
+        exit 1
+    end
+
+    if ast.parsetree.size > 1
+        puts 'One one query can be processed'
+        exit 1
+    end
+
+    querytree = ast.parsetree[0]
+
+    selectTree = querytree['SELECT'] 
+
+    if selectTree.nil?
+        puts 'Can only process SELECT queries'
+        exit 1
+    end
+
+    if selectTree['limitCount'].nil? || selectTree['limitCount']['A_CONST']['val'] > 100
+        puts 'You must put a limit on your query less than 100'
+        puts 'This tool generates insert querys, a large output will cause huge amounts of text to be produced'
+        exit 1
+    end
+
+    puts selectTree['limitCount'].inspect
+
 end
