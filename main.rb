@@ -1,68 +1,7 @@
-#!/usr/bin/env ruby
 require 'pg'
-
-class TableNode
-    attr_accessor :table_name
-    attr_accessor :column_name
-    attr_accessor :foreign_column_name
-    attr_accessor :depends
-    attr_accessor :parent
-    attr_accessor :values
-    attr_accessor :foreign_keys
-end
-
-class InsertStatement
-    attr_accessor :schema
-    attr_accessor :table_name
-    attr_accessor :columns
-    attr_accessor :values
-
-    def ==(o)
-        unless o.class == self.class
-            return false
-        end
-
-        unless o.schema == self.schema
-            return false
-        end
-
-        unless o.table_name == self.table_name
-            return false
-        end
-
-        unless o.columns.size == self.columns.size
-            return false
-        end
-
-        o.columns.each_with_index { |x, i|
-            unless o.columns[i] == self.columns[i]
-                return false
-            end
-        }
-
-        unless o.values.size == self.values.size
-            return false
-        end
-
-        o.values.each_with_index { |x, i|
-            unless o.values[i] == self.values[i]
-                return false
-            end
-        }
-
-        return true
-    end
-    alias :eql? :==
-end
-
-def exec(query)
-    conn = PG.connect(host: 'db.local.eroad.io', dbname: 'central', user: 'postgres', password: 'postgres', port: '5432')
-    result = Array.new
-    conn.exec(query).each do |row|
-        result << row
-    end
-    return result
-end
+require './insert_statement'
+require './table_node'
+require './sql_utils'
 
 def foreign_keys(schema, table)
     q = "
@@ -126,7 +65,7 @@ def foreign_key_tree(schema, table, parent = nil, foreign_column = nil, column =
         t.values = exec(query)[0]
         #puts "VALUES: #{t.values.inspect}"
     end
-    
+
     t.foreign_keys.each do |dep|
         new_table = foreign_key_tree(schema, dep['foreign_table_name'], t, dep['foreign_column_name'], dep['column_name'])
         t.depends << new_table
@@ -160,29 +99,34 @@ def generate_insert(schema, table_node, inserts)
 
     insert.schema = schema
     insert.table_name = table_node.table_name
-	columns = retrive_columns(schema, table_node.table_name)
+    columns = retrive_columns(schema, table_node.table_name)
     insert.columns = columns
-	values = Array.new
-	columns.each { |col|
-		values << table_node.values[col]
-	}
-	values.each_with_index { |val, i|
-		if values[i] == nil
-			values[i] = 'NULL'
-		else
-			values[i] = "'#{values[i]}'"
-		end
-	}
-	
+    values = Array.new
+    columns.each { |col|
+        values << table_node.values[col]
+    }
+    values.each_with_index { |val, i|
+        if values[i] == nil
+            values[i] = 'NULL'
+        else
+            values[i] = "'#{values[i]}'"
+        end
+    }
+
     insert.values = values
     inserts << insert
 end
 
 def print_inserts(inserts)
     inserts.each { |i|
+        puts "do $$"
+        puts "begin"
         puts "INSERT INTO #{i.schema}.#{i.table_name}"
         puts "(#{i.columns.join(", ")})"
         puts "VALUES(#{i.values.join(", ")});"
+        puts "exception when unique_violation then"
+        puts "raise notice 'Did not insert, since unique_violation';"
+        puts "end $$;"
     }
 end
 
@@ -198,14 +142,14 @@ def pretty_print(table_node, indent = "")
     }
 end
 
-schema, table = ARGV[0].split(".")
+def get_inserts_for_table(schema, table)
+    dependency_tree = foreign_key_tree(schema, table)
 
-dependency_tree = foreign_key_tree(schema, table)
+    inserts = Array.new
+    generate_insert(schema, dependency_tree, inserts)
 
-inserts = Array.new
-generate_insert(schema, dependency_tree, inserts)
+    # TODO may not ever need this. Possibly have to check that
+    # inserts = inserts.uniq
 
-# TODO may not ever need this. Possibly have to check that
-# inserts = inserts.uniq
-
-print_inserts(inserts)
+    print_inserts(inserts)
+end

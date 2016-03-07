@@ -1,0 +1,59 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require './main'
+
+$description_table = 'Pull a single value from TABLE, equivalent to getting the values from \'SELECT * from TABLE LIMIT 1;\'. Be sure to use the full table name, e.g. central.driver'
+$description_query = 'Arbitrary query to be evaluated and generate INSERTS to replicate the same results on local'
+$description_help = 'Prints this help message'
+
+Options = Struct.new(:table, :query)
+
+class Parser
+    def self.parse(options)
+        args = Options.new
+
+        opt_parser = OptionParser.new do |opts|
+            opts.banner = "Usage: table-extractor [options]"
+
+            opts.on("-tTABLE", "--table=TABLE", $description_table) do |t|
+                args.table = t
+            end
+
+            opts.on("-qQUERY", "--query=QUERY", $description_query) do |q|
+                args.query = q
+            end
+
+            opts.on('-h', '--help', $description_help) do
+                puts opts
+                exit
+            end
+        end
+
+        opt_parser.parse!(options)
+        return args
+
+    end
+
+end
+
+options = Parser.parse(ARGV)
+
+puts options.inspect
+
+unless options.table.nil?
+	schema, table = options.table.split('.')
+	if schema.nil? || table.nil?
+		Parser.parse %w[--help]
+		exit
+	end
+	get_inserts_for_table(schema, table)
+end
+
+unless options.query.nil?
+	puts "QUERY!!!"
+end
+
+if options.table.nil? && options.query.nil?
+	Parser.parse %w[--help]
+end
