@@ -16,6 +16,43 @@ class InsertStatement
     attr_accessor :table_name
     attr_accessor :columns
     attr_accessor :values
+
+    def ==(o)
+        unless o.class == self.class
+            return false
+        end
+
+        unless o.schema == self.schema
+            return false
+        end
+
+        unless o.table_name == self.table_name
+            return false
+        end
+
+        unless o.columns.size == self.columns.size
+            return false
+        end
+
+        o.columns.each_with_index { |x, i|
+            unless o.columns[i] == self.columns[i]
+                return false
+            end
+        }
+
+        unless o.values.size == self.values.size
+            return false
+        end
+
+        o.values.each_with_index { |x, i|
+            unless o.values[i] == self.values[i]
+                return false
+            end
+        }
+
+        return true
+    end
+    alias :eql? :==
 end
 
 def exec(query)
@@ -165,12 +202,10 @@ schema, table = ARGV[0].split(".")
 
 dependency_tree = foreign_key_tree(schema, table)
 
-#pretty_print(dependency_tree)
-
 inserts = Array.new
 generate_insert(schema, dependency_tree, inserts)
 
-# TODO implement comparison so that .uniq works
-#inserts = inserts.uniq
+# TODO may not ever need this. Possibly have to check that
+# inserts = inserts.uniq
 
 print_inserts(inserts)
