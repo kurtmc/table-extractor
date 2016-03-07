@@ -1,3 +1,5 @@
+require './sql_utils'
+
 def foreign_keys(schema, table)
     q = "
 SELECT 
