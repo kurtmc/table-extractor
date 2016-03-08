@@ -6,6 +6,8 @@ require './table_node'
 require './sql_utils'
 require './dependency'
 
+# TODO, modify to accept mutlipe rows
+# Just interate over 'values' and run query for each and append
 def add_values(schema, table, t)
     if t.parent == nil
         t.data['values'] = exec("SELECT * FROM #{schema}.#{table} LIMIT 1")[0]
