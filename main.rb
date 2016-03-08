@@ -10,21 +10,26 @@ require './dependency'
 # Just interate over 'values' and run query for each and append
 def add_values(schema, table, t)
     if t.parent == nil
-        t.data['values'] = exec("SELECT * FROM #{schema}.#{table} LIMIT 1")[0]
+        t.data['values'] = exec("SELECT * FROM #{schema}.#{table} LIMIT 1")
     else
-        where = "WHERE"
-        unless t.parent.foreign_keys.size == 0
-            t.parent.foreign_keys.each { |x|
-                if x['foreign_table_name'] == t.table_name
-                    foreign_col = x['foreign_column_name']
-                    col = x['column_name']
-                    parent_val = t.parent.data['values'][col]
-                    where = "#{where} #{foreign_col} = '#{parent_val}'"
-                end
-            }
-        end
-        query = "SELECT * FROM #{schema}.#{table} #{where}";
-        t.data['values'] = exec(query)[0]
+        t.parent.data['values'].each_with_index { |v, i|
+            where = "WHERE"
+            unless t.parent.foreign_keys.size == 0
+                t.parent.foreign_keys.each { |x|
+                    if x['foreign_table_name'] == t.table_name
+                        foreign_col = x['foreign_column_name']
+                        col = x['column_name']
+                        parent_val = t.parent.data['values'][i][col]
+                        where = "#{where} #{foreign_col} = '#{parent_val}'"
+                    end
+                }
+            end
+            query = "SELECT * FROM #{schema}.#{table} #{where} LIMIT 1";
+            if t.data['values'].nil?
+                t.data['values'] = Array.new
+            end
+            t.data['values'] << exec(query)[0]
+        }
     end
 
     t.depends.each { |n|
@@ -60,14 +65,19 @@ def generate_insert(schema, table_node, inserts)
     columns = retrive_columns(schema, table_node.table_name)
     insert.columns = columns
     values = Array.new
-    columns.each { |col|
-        values << table_node.data['values'][col]
+    table_node.data['values'].each_with_index { |v, i|
+        values << Array.new
+        columns.each { |col|
+            values[i] << table_node.data['values'][i][col]
+        }
     }
-    values.each_with_index { |val, i|
-        if values[i] == nil
-            values[i] = 'NULL'
-        else values[i] = "'#{values[i]}'"
-        end
+    values.each { |row|
+        row.each_with_index { |v, i|
+            if row[i] == nil
+                row[i] = 'NULL'
+            else row[i] = "'#{row[i]}'"
+            end
+        }
     }
 
     insert.values = values
@@ -80,7 +90,15 @@ def print_inserts(inserts)
         puts "begin"
         puts "INSERT INTO #{i.schema}.#{i.table_name}"
         puts "(#{i.columns.join(", ")})"
-        puts "VALUES(#{i.values.join(", ")});"
+        puts "VALUES"
+        i.values.each_with_index { |v, index|
+            if index == i.values.size - 1
+                puts "(#{v.join(", ")})"
+            else
+                puts "(#{v.join(", ")}),"
+            end
+        }
+        puts ';'
         puts "exception when unique_violation then"
         puts "raise notice 'Did not insert, since unique_violation';"
         puts "end $$;"
