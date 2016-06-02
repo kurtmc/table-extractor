@@ -6,11 +6,20 @@ require './table_node'
 require './sql_utils'
 require './dependency'
 
+def add_values(schema, table, t, query = nil)
+
+    if query.nil?
+        query = "SELECT * FROM #{schema}.#{table} LIMIT 1"
+    end
+
+    add_values_rec(schema, table, t, query)
+end
+
 # TODO, modify to accept mutlipe rows
 # Just interate over 'values' and run query for each and append
-def add_values(schema, table, t)
+def add_values_rec(schema, table, t, query)
     if t.parent == nil
-        t.data['values'] = exec("SELECT * FROM #{schema}.#{table} LIMIT 1")
+        t.data['values'] = exec(query)
     else
         t.parent.data['values'].each_with_index { |v, i|
             where = "WHERE"
@@ -33,7 +42,7 @@ def add_values(schema, table, t)
     end
 
     t.depends.each { |n|
-        add_values(schema, n.table_name, n)
+        add_values_rec(schema, n.table_name, n, query)
     }
 end
 
@@ -159,6 +168,24 @@ def get_inserts_for_query(query)
         exit 1
     end
 
-    puts selectTree['limitCount'].inspect
+    limit = selectTree['limitCount']['A_CONST']['val']
+    schema = selectTree['fromClause'][0]['RANGEVAR']['schemaname']
+    table = selectTree['fromClause'][0]['RANGEVAR']['relname']
 
+    query = "SELECT * FROM #{schema}.#{table} LIMIT #{limit}"
+
+    puts "Query: #{query}"
+
+    dependency_tree = foreign_key_tree(schema, table)
+
+    add_values(schema, table, dependency_tree, query)
+
+    inserts = Array.new
+    generate_insert(schema, dependency_tree, inserts)
+
+    # TODO may not ever need this. Possibly have to check that
+    # inserts = inserts.uniq
+
+    print_inserts(inserts)
+    
 end
